@@ -18,9 +18,7 @@
 package org.apache.bahir.sql.streaming.mqtt
 
 import java.nio.charset.Charset
-import java.sql.Timestamp
-import java.text.SimpleDateFormat
-import java.util.Calendar
+import java.time.Instant
 import java.util.concurrent.CountDownLatch
 
 import scala.collection.concurrent.TrieMap
@@ -33,17 +31,15 @@ import org.eclipse.paho.client.mqttv3.persist.{MemoryPersistence, MqttDefaultFil
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.sql.execution.streaming.{LongOffset, Offset, Source}
 import org.apache.spark.sql.sources.{DataSourceRegister, StreamSourceProvider}
-import org.apache.spark.sql.types.{StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types.{StringType, StructField, StructType, LongType, BinaryType}
 
 import org.apache.bahir.utils.Logging
 
 
 object MQTTStreamConstants {
 
-  val DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-
-  val SCHEMA_DEFAULT = StructType(StructField("value", StringType)
-    :: StructField("timestamp", TimestampType) :: Nil)
+  val SCHEMA_DEFAULT = StructType(StructField("value", BinaryType)
+    :: StructField("topic", StringType) :: StructField("timestamp", LongType) :: Nil)
 }
 
 /**
@@ -68,7 +64,7 @@ object MQTTStreamConstants {
  *            on the subscribe.
  */
 class MQTTTextStreamSource(brokerUrl: String, persistence: MqttClientPersistence,
-    topic: String, clientId: String, messageParser: Array[Byte] => (String, Timestamp),
+    topic: String, clientId: String, messageParser: (Array[Byte], String) => (Array[Byte], String, Long),
     sqlContext: SQLContext, mqttConnectOptions: MqttConnectOptions, qos: Int)
   extends Source with Logging {
 
@@ -76,7 +72,7 @@ class MQTTTextStreamSource(brokerUrl: String, persistence: MqttClientPersistence
 
   private val store = new LocalMessageStore(persistence, sqlContext.sparkContext.getConf)
 
-  private val messages = new TrieMap[Int, (String, Timestamp)]
+  private val messages = new TrieMap[Int, (Array[Byte], String, Long)]
 
   private val initLock = new CountDownLatch(1)
 
@@ -103,7 +99,7 @@ class MQTTTextStreamSource(brokerUrl: String, persistence: MqttClientPersistence
       override def messageArrived(topic_ : String, message: MqttMessage): Unit = synchronized {
         initLock.await() // Wait for initialization to complete.
         val temp = offset + 1
-        messages.put(temp, messageParser(message.getPayload))
+        messages.put(temp, messageParser(message.getPayload, topic_))
         offset = temp
         log.trace(s"Message arrived, $topic_ $message")
       }
@@ -151,17 +147,17 @@ class MQTTTextStreamSource(brokerUrl: String, persistence: MqttClientPersistence
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = synchronized {
     val startIndex = start.getOrElse(LongOffset(0L)).asInstanceOf[LongOffset].offset.toInt
     val endIndex = end.asInstanceOf[LongOffset].offset.toInt
-    val data: ArrayBuffer[(String, Timestamp)] = ArrayBuffer.empty
+    val data: ArrayBuffer[(Array[Byte], String, Long)] = ArrayBuffer.empty
     // Move consumed messages to persistent store.
     (startIndex + 1 to endIndex).foreach { id =>
-      val element: (String, Timestamp) = messages.getOrElse(id, store.retrieve(id))
+      val element: (Array[Byte], String, Long) = messages.getOrElse(id, store.retrieve(id))
       data += element
       store.store(id, element)
       messages.remove(id, element)
     }
     log.trace(s"Get Batch invoked, ${data.mkString}")
     import sqlContext.implicits._
-    data.toDF("value", "timestamp")
+    data.toDF("value", "topic", "timestamp")
   }
 
 }
@@ -191,9 +187,8 @@ class MQTTStreamSourceProvider extends StreamSourceProvider with DataSourceRegis
         }
     }
 
-    val messageParserWithTimeStamp = (x: Array[Byte]) =>
-      (new String(x, Charset.defaultCharset()), Timestamp.valueOf(
-      MQTTStreamConstants.DATE_FORMAT.format(Calendar.getInstance().getTime)))
+    val messageParserWithTimeStamp = (x: Array[Byte], topic: String) =>
+      (x, topic, Instant.now().toEpochMilli())
 
     // if default is subscribe everything, it leads to getting lot unwanted system messages.
     val topic: String = parameters.getOrElse("topic",

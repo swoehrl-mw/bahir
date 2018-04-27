@@ -19,6 +19,7 @@ package org.apache.bahir.sql.streaming.mqtt
 
 import java.io.File
 import java.sql.Timestamp
+import java.nio.charset.Charset
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -72,15 +73,15 @@ class BasicMQTTSourceSuite extends MQTTStreamSourceSuite {
   private def writeStreamResults(sqlContext: SQLContext,
       dataFrame: DataFrame, waitDuration: Long): Boolean = {
     import sqlContext.implicits._
-    dataFrame.as[(String, Timestamp)].writeStream.format("parquet").start(s"$tmpDir/t.parquet")
+    dataFrame.as[(Array[Byte], String, Long)].writeStream.format("parquet").start(s"$tmpDir/t.parquet")
       .awaitTermination(waitDuration)
   }
 
-  private def readBackStreamingResults(sqlContext: SQLContext): mutable.Buffer[String] = {
+  private def readBackStreamingResults(sqlContext: SQLContext): mutable.Buffer[Array[Byte]] = {
     import sqlContext.implicits._
     val asList =
       sqlContext.read.schema(MQTTStreamConstants.SCHEMA_DEFAULT)
-        .parquet(s"$tmpDir/t.parquet").as[(String, Timestamp)].map(_._1)
+        .parquet(s"$tmpDir/t.parquet").as[(Array[Byte], String, Long)].map(_._1)
         .collectAsList().asScala
     asList
   }
@@ -95,10 +96,10 @@ class BasicMQTTSourceSuite extends MQTTStreamSourceSuite {
 
     writeStreamResults(sqlContext, dataFrame, 5000)
 
-    val resultBuffer: mutable.Buffer[String] = readBackStreamingResults(sqlContext)
+    val resultBuffer: mutable.Buffer[Array[Byte]] = readBackStreamingResults(sqlContext)
 
     assert(resultBuffer.size == 1)
-    assert(resultBuffer.head == sendMessage)
+    assert(new String(resultBuffer.head, Charset.forName("UTF-8")) == sendMessage)
   }
 
   // TODO: reinstate this test after fixing BAHIR-83
@@ -117,10 +118,10 @@ class BasicMQTTSourceSuite extends MQTTStreamSourceSuite {
 
     writeStreamResults(sqlContext, dataFrame, 10000)
 
-    val resultBuffer: mutable.Buffer[String] = readBackStreamingResults(sqlContext)
+    val resultBuffer: mutable.Buffer[Array[Byte]] = readBackStreamingResults(sqlContext)
 
     assert(resultBuffer.size == 100)
-    assert(resultBuffer.head == sendMessage)
+    assert(new String(resultBuffer.head, Charset.forName("UTF-8")) == sendMessage)
   }
 
   test("no server up") {
