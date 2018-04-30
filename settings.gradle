@@ -1,0 +1,18 @@
+rootProject.name = 'bahir-parent_2.11'
+include ':spark-sql-cloudant_2.11'
+include ':spark-streaming-akka_2.11'
+include ':spark-sql-streaming-akka_2.11'
+include ':spark-streaming-mqtt_2.11'
+include ':spark-sql-streaming-mqtt_2.11'
+include ':spark-streaming-twitter_2.11'
+include ':spark-streaming-zeromq_2.11'
+include ':spark-streaming-pubsub_2.11'
+
+project(':spark-sql-cloudant_2.11').projectDir = "$rootDir/sql-cloudant" as File
+project(':spark-streaming-akka_2.11').projectDir = "$rootDir/streaming-akka" as File
+project(':spark-sql-streaming-akka_2.11').projectDir = "$rootDir/sql-streaming-akka" as File
+project(':spark-streaming-mqtt_2.11').projectDir = "$rootDir/streaming-mqtt" as File
+project(':spark-sql-streaming-mqtt_2.11').projectDir = "$rootDir/sql-streaming-mqtt" as File
+project(':spark-streaming-twitter_2.11').projectDir = "$rootDir/streaming-twitter" as File
+project(':spark-streaming-zeromq_2.11').projectDir = "$rootDir/streaming-zeromq" as File
+project(':spark-streaming-pubsub_2.11').projectDir = "$rootDir/streaming-pubsub" as File

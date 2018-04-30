@@ -23,3 +23,8 @@ target/
 .fbExcludeFilterFile
 dependency-reduced-pom.xml
 checkpoint
+out
+.gradle
+build
+gradle.properties
+credentials.gradle

@@ -1,0 +1,64 @@
+allprojects  {
+  apply plugin: 'maven'
+
+  group = 'org.apache.bahir'
+  version = '2.3.0-mw1'
+}
+
+subprojects {
+  apply plugin: 'java'
+  apply plugin: 'scala'
+  apply plugin: 'maven-publish'
+  if (file('../credentials.gradle').exists()) {
+    apply from: '../credentials.gradle'
+  } else {
+    apply from: '../credentials_default.gradle'
+  }
+  sourceCompatibility = 1.8
+  targetCompatibility = 1.8
+
+  task packageSources(type: Jar) {
+	classifier = 'sources'
+	from sourceSets.main.allSource
+
+  }
+  artifacts.archives packageSources
+  repositories {
+    mavenLocal()
+    
+    maven { url "https://repo1.maven.org/maven2" }
+    maven { url "https://repository.apache.org/snapshots" }
+  }
+
+  configurations.all {
+    it.exclude group: 'org.jboss.netty'
+    it.exclude group: 'org.codehaus.groovy'
+    it.exclude group: '*', module: '*_2.10'
+  }
+  dependencies {
+    compile group: 'org.spark-project.spark', name: 'unused', version:'1.0.0'
+    testCompile group: 'org.scalatest', name: 'scalatest_2.11', version:'2.2.6'
+    testCompile group: 'junit', name: 'junit', version:'4.12'
+  }
+
+
+    publishing {
+        repositories {
+            maven {
+                url project.nexus_url
+                credentials {
+                    username project.nexus_username
+                    password project.nexus_password
+                }
+                name "repo"
+            }
+        }
+        publications {
+            mavenJava(MavenPublication) {
+                from components.java
+            }
+        }
+    }
+
+  
+}

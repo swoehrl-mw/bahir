@@ -1,0 +1,27 @@
+
+description = 'Apache Bahir - Spark SQL Streaming Akka'
+dependencies {
+    compile group: 'org.apache.spark', name: 'spark-tags_2.11', version:'2.2.0'
+    compile group: 'org.apache.spark', name: 'spark-sql_2.11', version:'2.2.0'
+    compile group: 'com.typesafe.akka', name: 'akka-actor_2.11', version:'2.4.20'
+    compile group: 'com.typesafe.akka', name: 'akka-remote_2.11', version:'2.4.20'
+    compile group: 'com.typesafe.akka', name: 'akka-slf4j_2.11', version:'2.4.20'
+    compile group: 'org.rocksdb', name: 'rocksdbjni', version:'5.1.2'
+    testCompile group: 'org.apache.spark', name: 'spark-sql_2.11', version:'2.2.0'
+    testCompile(group: 'org.apache.spark', name: 'spark-core_2.11', version:'2.2.0') {
+exclude(module: 'jetty-plus')
+exclude(module: 'jetty-security')
+exclude(module: 'jetty-util')
+exclude(module: 'jetty-server')
+exclude(module: 'jetty-http')
+exclude(module: 'jetty-continuation')
+exclude(module: 'jetty-servlet')
+exclude(module: 'jetty-servlets')
+    }
+}
+
+task packageTests(type: Jar) {
+  from sourceSets.test.output
+  classifier = 'tests'
+}
+artifacts.archives packageTests
