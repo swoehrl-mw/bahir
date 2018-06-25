@@ -24,15 +24,12 @@ import java.util.concurrent.CountDownLatch
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
-
 import org.eclipse.paho.client.mqttv3._
 import org.eclipse.paho.client.mqttv3.persist.{MemoryPersistence, MqttDefaultFilePersistence}
-
 import org.apache.spark.sql.{DataFrame, SQLContext}
-import org.apache.spark.sql.execution.streaming.{LongOffset, Offset, Source}
+import org.apache.spark.sql.execution.streaming.{LongOffset, Offset, SerializedOffset, Source}
 import org.apache.spark.sql.sources.{DataSourceRegister, StreamSourceProvider}
-import org.apache.spark.sql.types.{StringType, StructField, StructType, LongType, BinaryType}
-
+import org.apache.spark.sql.types.{BinaryType, LongType, StringType, StructField, StructType}
 import org.apache.bahir.utils.Logging
 
 
@@ -117,7 +114,8 @@ class MQTTTextStreamSource(brokerUrl: String, persistence: MqttClientPersistence
     }
     client.setCallback(callback)
     client.connect(mqttConnectOptions)
-    client.subscribe(topic, qos)
+    topic.split(",").foreach(t => client.subscribe(t, qos))
+
     // It is not possible to initialize offset without `client.connect`
     offset = fetchLastProcessedOffset()
     initLock.countDown() // Release.
@@ -145,8 +143,20 @@ class MQTTTextStreamSource(brokerUrl: String, persistence: MqttClientPersistence
    * same data for a particular `start` and `end` pair.
    */
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = synchronized {
-    val startIndex = start.getOrElse(LongOffset(0L)).asInstanceOf[LongOffset].offset.toInt
-    val endIndex = end.asInstanceOf[LongOffset].offset.toInt
+    var startIndex : Int = 0
+    var endIndex : Int = 0
+    if (start.nonEmpty) {
+      if (start.get.isInstanceOf[SerializedOffset]) {
+        startIndex = LongOffset(start.get.asInstanceOf[SerializedOffset]).offset.toInt
+      } else {
+        startIndex = start.get.asInstanceOf[LongOffset].offset.toInt
+      }
+    }
+    if (end.isInstanceOf[SerializedOffset]) {
+      endIndex = LongOffset(end.asInstanceOf[SerializedOffset]).offset.toInt
+    } else {
+      endIndex = end.asInstanceOf[LongOffset].offset.toInt
+    }
     val data: ArrayBuffer[(Array[Byte], String, Long)] = ArrayBuffer.empty
     // Move consumed messages to persistent store.
     (startIndex + 1 to endIndex).foreach { id =>
